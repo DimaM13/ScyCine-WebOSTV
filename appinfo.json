@@ -1,0 +1,17 @@
+{
+  "id": "tv.skycine.webos",
+  "version": "2.0.0",
+  "vendor": "SkyLight",
+  "type": "web",
+  "main": "index.html",
+  "title": "SkyCine TV",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgImage": "icon.png",
+  "resolution": "1920x1080",
+  "uiRevision": 2,
+  "disableBackHistoryAPI": true,
+  "requiredPermissions": [
+    "media.operation"
+  ]
+}
