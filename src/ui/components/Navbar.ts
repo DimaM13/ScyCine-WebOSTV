@@ -2,36 +2,33 @@
 
 import { Icons } from '../icons';
 import { Preferences } from '../../storage/preferences';
+import { Library } from '../../types';
 
 export interface NavItemDef {
   id: string;
   label: string;
   iconHtml: string;
+  library?: Library;
 }
 
 export class Navbar {
   private container: HTMLElement;
   private currentScreen: string = 'home';
-  private onSelectCallback: (screen: string) => void;
+  private onSelectCallback: (screen: string, library?: Library) => void;
   private onLogoutCallback: () => void;
-
-  private items: NavItemDef[] = [
-    { id: 'home', label: 'Главная', iconHtml: Icons.home(26) },
-    { id: 'movies', label: 'Фильмы', iconHtml: Icons.film(26) },
-    { id: 'shows', label: 'Сериалы', iconHtml: Icons.tv(26) },
-    { id: 'search', label: 'Поиск', iconHtml: Icons.search(26) },
-    { id: 'rooms', label: 'Вместе', iconHtml: Icons.users(26) },
-    { id: 'settings', label: 'Настройки', iconHtml: Icons.settings(26) }
-  ];
+  private libraries: Library[] = [];
+  private items: NavItemDef[] = [];
 
   constructor(
-    onSelect: (screen: string) => void,
+    onSelect: (screen: string, library?: Library) => void,
     onLogout: () => void
   ) {
     this.onSelectCallback = onSelect;
     this.onLogoutCallback = onLogout;
     this.container = document.createElement('aside');
     this.container.className = 'nav-rail';
+
+    this.rebuildItems();
     this.render();
 
     // Auto expand/collapse sidebar on focus
@@ -43,6 +40,62 @@ export class Navbar {
         this.container.classList.remove('expanded');
       }
     });
+  }
+
+  public setLibraries(libraries: Library[]) {
+    this.libraries = libraries;
+    this.rebuildItems();
+    this.render();
+  }
+
+  private getLibraryIcon(lib: Library): string {
+    const nameLower = (lib.name || '').toLowerCase();
+    const typeUpper = (lib.type || '').toUpperCase();
+
+    if (nameLower.includes('мульт') || nameLower.includes('cartoon') || nameLower.includes('детск')) {
+      return Icons.sparkles(24);
+    }
+    if (nameLower.includes('песн') || nameLower.includes('музык') || nameLower.includes('audio') || nameLower.includes('music')) {
+      return Icons.music(24);
+    }
+    if (typeUpper === 'VIDEOS' || nameLower.includes('видео') || nameLower.includes('клип')) {
+      return Icons.folder(24);
+    }
+    if (typeUpper === 'SHOWS' || nameLower.includes('сериал') || nameLower.includes('аниме') || nameLower.includes('anime') || nameLower.includes('шоу')) {
+      return Icons.tv(24);
+    }
+    return Icons.film(24);
+  }
+
+  private rebuildItems() {
+    const list: NavItemDef[] = [
+      { id: 'home', label: 'Главная', iconHtml: Icons.home(24) }
+    ];
+
+    if (this.libraries.length > 0) {
+      this.libraries.forEach((lib) => {
+        list.push({
+          id: `lib_${lib.id}`,
+          label: lib.name,
+          iconHtml: this.getLibraryIcon(lib),
+          library: lib
+        });
+      });
+    } else {
+      // Fallback while libraries are loading
+      list.push(
+        { id: 'movies', label: 'Фильмы', iconHtml: Icons.film(24) },
+        { id: 'shows', label: 'Сериалы', iconHtml: Icons.tv(24) }
+      );
+    }
+
+    list.push(
+      { id: 'search', label: 'Поиск', iconHtml: Icons.search(24) },
+      { id: 'rooms', label: 'Вместе', iconHtml: Icons.users(24) },
+      { id: 'settings', label: 'Настройки', iconHtml: Icons.settings(24) }
+    );
+
+    this.items = list;
   }
 
   public getElement(): HTMLElement {
@@ -69,7 +122,7 @@ export class Navbar {
       <!-- Brand Logo -->
       <div class="nav-rail-logo">
         <div class="nav-logo-icon">
-          ${Icons.clapperboard(30, '#07090e')}
+          ${Icons.clapperboard(26, '#07090e')}
         </div>
         <div class="nav-logo-text">
           <div class="nav-logo-title">SKY<span>CINE</span></div>
@@ -77,7 +130,7 @@ export class Navbar {
         </div>
       </div>
 
-      <!-- Menu Items -->
+      <!-- Menu Items Container -->
       <nav class="nav-menu">
         ${this.items
           .map(
@@ -130,7 +183,7 @@ export class Navbar {
       if (btn) {
         btn.addEventListener('click', () => {
           this.setActive(item.id);
-          this.onSelectCallback(item.id);
+          this.onSelectCallback(item.id, item.library);
         });
       }
     });

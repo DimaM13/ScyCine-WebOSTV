@@ -104,15 +104,19 @@ export const SkyCineApi = {
     return res.data.media || res.data;
   },
 
-  async getMovies(): Promise<MediaItem[]> {
+  async getMovies(libraryId?: string): Promise<MediaItem[]> {
     const client = getApiClient();
-    const res = await client.get('/media/movies');
+    const res = await client.get('/media/movies', {
+      params: libraryId ? { libraryId } : {}
+    });
     return res.data.movies || res.data || [];
   },
 
-  async getShows(): Promise<MediaItem[]> {
+  async getShows(libraryId?: string): Promise<MediaItem[]> {
     const client = getApiClient();
-    const res = await client.get('/media/shows');
+    const res = await client.get('/media/shows', {
+      params: libraryId ? { libraryId } : {}
+    });
     return res.data.shows || res.data || [];
   },
 

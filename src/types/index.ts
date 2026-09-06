@@ -43,7 +43,7 @@ export interface Episode {
 export interface Library {
   id: string;
   name: string;
-  type: 'movies' | 'shows' | 'anime' | 'cartoons' | 'videos';
+  type: 'MOVIES' | 'SHOWS' | 'VIDEOS' | string;
   itemCount?: number;
 }
 
@@ -63,4 +63,4 @@ export interface AudioTrackOption {
   isSelected?: boolean;
 }
 
-export type NavScreen = 'home' | 'movies' | 'shows' | 'search' | 'rooms' | 'settings' | 'auth';
+export type NavScreen = 'home' | 'search' | 'rooms' | 'settings' | 'auth' | string;

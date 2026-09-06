@@ -12,7 +12,7 @@ import { SearchPage } from './ui/pages/SearchPage';
 import { RoomsPage } from './ui/pages/RoomsPage';
 import { SettingsPage } from './ui/pages/SettingsPage';
 import { VideoPlayer } from './ui/player/VideoPlayer';
-import { MediaItem, Episode } from './types';
+import { MediaItem, Episode, Library } from './types';
 import { SkyCineApi } from './api/client';
 import { RemoteLogger } from './logger';
 
@@ -21,6 +21,7 @@ export class App {
   private appContainer: HTMLElement;
   private viewportEl: HTMLElement;
   private navbar: Navbar | null = null;
+  private libraries: Library[] = [];
 
   private currentScreen: string = 'home';
   private activePage: any = null;
@@ -82,17 +83,54 @@ export class App {
   public showMainApp() {
     this.viewportEl.innerHTML = '';
 
-    // Initialize Sidebar Navbar
+    // Initialize Sidebar Navbar with dynamic library callback
     this.navbar = new Navbar(
-      (screen) => this.navigateTo(screen),
+      (screen, library) => {
+        if (library) {
+          this.navigateToLibrary(library);
+        } else {
+          this.navigateTo(screen);
+        }
+      },
       () => this.handleLogout()
     );
 
     // Insert navbar before viewport in container
     this.appContainer.insertBefore(this.navbar.getElement(), this.viewportEl);
 
+    // Load dynamic libraries from server
+    this.loadLibraries();
+
     // Default to Home Screen
     this.navigateTo('home');
+  }
+
+  public async loadLibraries() {
+    try {
+      const libs = await SkyCineApi.getLibraries();
+      this.libraries = libs || [];
+      if (this.navbar) {
+        this.navbar.setLibraries(this.libraries);
+      }
+    } catch (e) {
+      console.error('[App] Failed to load libraries:', e);
+    }
+  }
+
+  public navigateToLibrary(library: Library) {
+    this.currentScreen = `lib_${library.id}`;
+    this.cleanupDetail();
+    this.cleanupPlayer();
+
+    if (this.navbar) {
+      this.navbar.setActive(this.currentScreen);
+    }
+
+    this.viewportEl.innerHTML = '';
+
+    const cat = new CatalogPage(library, (item) => this.openDetail(item));
+    this.activePage = cat;
+    this.viewportEl.appendChild(cat.getElement());
   }
 
   public navigateTo(screen: string) {
@@ -102,6 +140,14 @@ export class App {
 
     if (this.navbar) {
       this.navbar.setActive(screen);
+    }
+
+    if (screen.startsWith('lib_')) {
+      const lib = this.libraries.find(l => `lib_${l.id}` === screen);
+      if (lib) {
+        this.navigateToLibrary(lib);
+        return;
+      }
     }
 
     this.viewportEl.innerHTML = '';

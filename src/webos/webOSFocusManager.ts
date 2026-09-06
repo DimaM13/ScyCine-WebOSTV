@@ -178,9 +178,10 @@ export class WebOSFocusManager {
       const current = this.getCurrentFocusedElement();
       const inSidebar = current && current.closest('.nav-rail');
       if (!inSidebar) {
-        const firstNav = document.querySelector('.nav-rail [data-tv-focus="true"]') as HTMLElement;
-        if (firstNav) {
-          this.focus(firstNav);
+        const targetNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                           document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
+        if (targetNav) {
+          this.focus(targetNav);
           return;
         }
       }
