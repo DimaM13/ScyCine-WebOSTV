@@ -188,12 +188,12 @@ export class WebOSPlayerService {
 
     this.boundOnLoadedMetadata = () => {
       this.isPrepared = true;
-      if (this.videoEl?.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
+      if (!this.isAudioRemux && this.videoEl?.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
         this.durationSecs = this.videoEl.duration;
       }
-      RemoteLogger.info('WEBOS_PLAYER', `Metadata loaded. Duration: ${this.durationSecs}s`);
+      RemoteLogger.info('WEBOS_PLAYER', `Metadata loaded. Duration: ${this.durationSecs}s (remux: ${this.isAudioRemux})`);
       applyStartSeek();
-      this.callbacks.onTimeUpdate?.(startPositionSeconds, this.durationSecs);
+      this.callbacks.onTimeUpdate?.(this.currentPosSecs, this.durationSecs);
       this.notifyAudioTracks();
     };
 
