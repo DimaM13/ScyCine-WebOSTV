@@ -61,8 +61,16 @@
         -ms-overflow-style: none !important;
         scrollbar-width: none !important;
       }
+      /* Suppress TV Native Focus Ring & Tap Highlight */
+      *, *::before, *::after {
+        outline: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      *:focus, *:focus-visible, button:focus, div:focus, a:focus, input:focus {
+        outline: none !important;
+        -webkit-focus-ring-color: transparent !important;
+      }
     </style>
-    <link rel="stylesheet" href="./style.css">
   </head>
   <body>
     <!-- Hardware-Accelerated Video Surface for LG webOS -->

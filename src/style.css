@@ -6,6 +6,19 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+*:focus,
+*:focus-visible,
+button:focus,
+div:focus,
+a:focus,
+input:focus {
+  outline: none !important;
+  outline-offset: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
 }
 
 
@@ -40,17 +53,22 @@ html, body  {
 .tv-focused,
 [data-tv-focus="true"].tv-focused {
   outline: none !important;
+  outline-offset: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
   border-color: #fbbf24 !important;
-  box-shadow: 0 0 0 3.5px #fbbf24, 0 8px 24px rgba(0, 0, 0, 0.8) !important;
+  box-shadow: 0 0 0 3.5px #fbbf24 !important;
   transform: scale(1.04) translateZ(0) !important;
   z-index: 40 !important;
 }
 
 /* Nav Item Focused: Elegant Cinema Gold Capsule */
 .nav-item.tv-focused {
+  outline: none !important;
+  outline-offset: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
   background: rgba(245, 158, 11, 0.22) !important;
   border-color: #fbbf24 !important;
-  box-shadow: 0 0 0 2.5px #fbbf24, 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 0 0 2.5px #fbbf24 !important;
   color: #ffffff !important;
   border-radius: 14px !important;
   transform: scale(1.03) translateZ(0) !important;
@@ -58,17 +76,23 @@ html, body  {
 
 /* Cinema Card Focused: Smooth Rounded Gold Frame */
 .cinema-card.tv-focused {
+  outline: none !important;
+  outline-offset: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
   border-color: #fbbf24 !important;
-  box-shadow: 0 0 0 3.5px #fbbf24, 0 12px 28px rgba(0, 0, 0, 0.9) !important;
+  box-shadow: 0 0 0 3.5px #fbbf24 !important;
   border-radius: 20px !important;
-  transform: scale(1.05) translateZ(0) !important;
+  transform: scale(1.04) translateZ(0) !important;
   z-index: 50 !important;
 }
 
 /* Episode Card Focused */
 .episode-card.tv-focused {
+  outline: none !important;
+  outline-offset: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
   border-color: #fbbf24 !important;
-  box-shadow: 0 0 0 3.5px #fbbf24, 0 10px 24px rgba(0, 0, 0, 0.85) !important;
+  box-shadow: 0 0 0 3.5px #fbbf24 !important;
   border-radius: 16px !important;
   transform: scale(1.04) translateZ(0) !important;
   z-index: 50 !important;
@@ -76,10 +100,13 @@ html, body  {
 
 /* Buttons Focused */
 .tv-btn.tv-focused {
+  outline: none !important;
+  outline-offset: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
   border-color: #fbbf24 !important;
-  box-shadow: 0 0 0 3.5px #fbbf24, 0 8px 20px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: 0 0 0 3.5px #fbbf24 !important;
   border-radius: 16px !important;
-  transform: scale(1.05) translateZ(0) !important;
+  transform: scale(1.04) translateZ(0) !important;
 }
 
 /* Virtual Keyboard Focused Keys: Solid White Fill with Deep Black Text for high contrast */
@@ -508,7 +535,8 @@ button.tv-kb-key[data-tv-focus="true"]:focus *  {
   display: flex;
   overflow-x: auto;
   padding: 16px 64px 36px 0;
-  scroll-behavior: smooth;
+  contain: layout;
+  transform: translateZ(0);
 }
 
 
@@ -525,7 +553,9 @@ button.tv-kb-key[data-tv-focus="true"]:focus *  {
   overflow: hidden;
   cursor: pointer;
   position: relative;
-  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
+  transition: transform 0.08s ease-out;
+  transform: translateZ(0);
+  contain: content;
 }
 
 

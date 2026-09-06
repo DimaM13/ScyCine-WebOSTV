@@ -109,9 +109,9 @@ export class WebOSFocusManager {
     if (scroll) {
       try {
         el.scrollIntoView({
-          behavior: 'smooth',
+          behavior: 'auto',
           block: 'nearest',
-          inline: 'center'
+          inline: 'nearest'
         });
       } catch {
         el.scrollIntoView(false);
@@ -233,6 +233,71 @@ export class WebOSFocusManager {
       return;
     }
 
+    // 0. Dedicated Detail View Navigation (Seasons, Episodes, Play button)
+    const currentDetail = current.closest('.detail-view');
+    if (currentDetail) {
+      if (current.matches('[data-focus-id="detail-back-btn"]')) {
+        if (dir === 'down') {
+          const playBtn = currentDetail.querySelector('[data-focus-id="detail-play-btn"]') as HTMLElement;
+          if (playBtn) { this.focus(playBtn); return; }
+        }
+      } else if (current.matches('[data-focus-id="detail-play-btn"]')) {
+        if (dir === 'up') {
+          const backBtn = currentDetail.querySelector('[data-focus-id="detail-back-btn"]') as HTMLElement;
+          if (backBtn) { this.focus(backBtn); return; }
+        } else if (dir === 'down') {
+          const firstTab = currentDetail.querySelector('.season-tab-btn.active, .season-tab-btn') as HTMLElement;
+          if (firstTab) {
+            this.focus(firstTab);
+            return;
+          }
+          const firstEp = currentDetail.querySelector('.episode-card') as HTMLElement;
+          if (firstEp) {
+            this.focus(firstEp);
+            return;
+          }
+        }
+      } else if (current.classList.contains('season-tab-btn')) {
+        const tabs = Array.from(currentDetail.querySelectorAll('.season-tab-btn')) as HTMLElement[];
+        const tIdx = tabs.indexOf(current);
+        if (dir === 'left' && tIdx > 0) {
+          this.focus(tabs[tIdx - 1]);
+          return;
+        } else if (dir === 'right' && tIdx + 1 < tabs.length) {
+          this.focus(tabs[tIdx + 1]);
+          return;
+        } else if (dir === 'up') {
+          const playBtn = currentDetail.querySelector('[data-focus-id="detail-play-btn"]') as HTMLElement;
+          if (playBtn) { this.focus(playBtn); return; }
+        } else if (dir === 'down') {
+          const firstEp = currentDetail.querySelector('.episode-card') as HTMLElement;
+          if (firstEp) { this.focus(firstEp); return; }
+        }
+      } else if (current.classList.contains('episode-card')) {
+        const epCards = Array.from(currentDetail.querySelectorAll('.episode-card')) as HTMLElement[];
+        const eIdx = epCards.indexOf(current);
+        if (dir === 'left' && eIdx > 0) {
+          this.focus(epCards[eIdx - 1]);
+          return;
+        } else if (dir === 'right' && eIdx + 1 < epCards.length) {
+          this.focus(epCards[eIdx + 1]);
+          return;
+        } else if (dir === 'up') {
+          const activeTab = currentDetail.querySelector('.season-tab-btn.active, .season-tab-btn') as HTMLElement;
+          if (activeTab) {
+            this.focus(activeTab);
+            return;
+          }
+          const playBtn = currentDetail.querySelector('[data-focus-id="detail-play-btn"]') as HTMLElement;
+          if (playBtn) {
+            this.focus(playBtn);
+            return;
+          }
+        }
+      }
+      return;
+    }
+
     // Active View Scoping: strictly prioritize topmost view
     let searchScope: ParentNode = document;
     const playerView = document.querySelector('.player-view') as HTMLElement;
@@ -315,8 +380,8 @@ export class WebOSFocusManager {
       }
     }
 
-    // 3. Instant O(1) Hero Billboard Actions Navigation
-    const currentHero = current.closest('.hero-actions');
+    // 3. Instant O(1) Hero Billboard Actions Navigation (Main Page)
+    const currentHero = current.closest('.hero-billboard .hero-actions');
     if (currentHero) {
       if (dir === 'left') {
         const prevBtn = current.previousElementSibling as HTMLElement;

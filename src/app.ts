@@ -190,10 +190,15 @@ export class App {
   public openDetail(media: MediaItem) {
     this.cleanupDetail();
 
+    // Hide background app container while detail view is open
+    this.appContainer.style.display = 'none';
+
     const detail = new DetailPage(
       media,
       () => {
         this.activeDetail = null;
+        this.appContainer.style.display = 'block';
+        focusManager.focusFirst();
       },
       (item, ep, list) => {
         this.playMedia(item, ep, list);
@@ -202,6 +207,9 @@ export class App {
 
     this.activeDetail = detail;
     this.rootEl.appendChild(detail.getElement());
+    setTimeout(() => {
+      focusManager.focus('detail-play-btn');
+    }, 50);
   }
 
   public async playMedia(media: MediaItem, episode?: Episode, episodesList?: Episode[]) {
@@ -283,6 +291,7 @@ export class App {
     if (this.activeDetail) {
       this.activeDetail.close();
       this.activeDetail = null;
+      this.appContainer.style.display = 'block';
     }
   }
 
