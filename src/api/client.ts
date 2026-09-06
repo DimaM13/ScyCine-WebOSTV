@@ -54,6 +54,11 @@ export const SkyCineApi = {
     return `${Preferences.getServerUrl()}${clean.startsWith('/') ? '' : '/'}${clean}`;
   },
 
+  getThumbnailUrl(mediaId: string): string {
+    if (!mediaId) return '';
+    return `${Preferences.getServerUrl()}/api/media/item/${encodeURIComponent(mediaId)}/thumbnail`;
+  },
+
   // Auth
   async login(username: string, password: string): Promise<{ token: string; user: User }> {
     const client = getApiClient();

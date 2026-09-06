@@ -16,10 +16,12 @@ export function createCinemaCard(
   card.setAttribute('data-focus-id', `${focusIdPrefix}-${safeId}`);
   card.setAttribute('tabindex', '0');
 
-  const posterUrl = SkyCineApi.getImageUrl(item.posterPath || item.stillPath);
+  const posterUrl = (item.posterPath || item.stillPath)
+    ? SkyCineApi.getImageUrl(item.posterPath || item.stillPath)
+    : (item.id ? SkyCineApi.getThumbnailUrl(item.id) : '');
   const title = item.title || item.displayTitle || item.showTitle || 'Без названия';
   const isShow = item.type === 'SHOW' || Boolean(item.showTitle);
-  const subText = isShow ? 'Сериал' : item.year ? `${item.year}` : 'Фильм';
+  const subText = isShow ? 'Сериал' : item.year ? `${item.year}` : 'Видео / Фильм';
 
   const progressSecs = item.userProgress || item.progressSeconds || 0;
   const totalSecs = item.durationSeconds || 0;
@@ -31,8 +33,24 @@ export function createCinemaCard(
     <div class="card-poster-wrap">
       ${
         posterUrl
-          ? `<img class="card-poster-img" src="${posterUrl}" alt="${title}" loading="lazy" />`
-          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#141a29;color:#64748b;">${Icons.film(48, '#334155')}</div>`
+          ? `
+            <img 
+              class="card-poster-img" 
+              src="${posterUrl}" 
+              alt="${title}" 
+              loading="lazy" 
+              decoding="async"
+              onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';" 
+            />
+            <div class="card-poster-fallback" style="display:none;width:100%;height:100%;align-items:center;justify-content:center;background:#141a29;color:#64748b;">
+              ${Icons.clapperboard(44, '#334155')}
+            </div>
+          `
+          : `
+            <div class="card-poster-fallback" style="display:flex;width:100%;height:100%;align-items:center;justify-content:center;background:#141a29;color:#64748b;">
+              ${Icons.film(44, '#334155')}
+            </div>
+          `
       }
       ${
         item.rating
@@ -82,14 +100,28 @@ export function createEpisodeCard(
   card.setAttribute('data-focus-id', `ep-${ep.id}`);
   card.setAttribute('tabindex', '0');
 
-  const thumbUrl = SkyCineApi.getImageUrl(ep.stillPath);
+  const thumbUrl = ep.stillPath
+    ? SkyCineApi.getImageUrl(ep.stillPath)
+    : (ep.id ? SkyCineApi.getThumbnailUrl(ep.id) : '');
   const title = ep.title || `${ep.episodeNumber} серия`;
 
   card.innerHTML = `
     <div class="episode-thumb-wrap">
       ${
         thumbUrl
-          ? `<img class="episode-thumb-img" src="${thumbUrl}" alt="${title}" loading="lazy" />`
+          ? `
+            <img 
+              class="episode-thumb-img" 
+              src="${thumbUrl}" 
+              alt="${title}" 
+              loading="lazy" 
+              decoding="async"
+              onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';" 
+            />
+            <div class="episode-thumb-fallback" style="display:none;width:100%;height:100%;align-items:center;justify-content:center;background:#141a29;color:#64748b;">
+              ${Icons.play(36, '#64748b')}
+            </div>
+          `
           : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#141a29;color:#64748b;">${Icons.play(36, '#64748b')}</div>`
       }
       <span class="episode-num-badge">${ep.episodeNumber} серия</span>

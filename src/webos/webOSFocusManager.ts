@@ -247,7 +247,106 @@ export class WebOSFocusManager {
       searchScope = detailView;
     }
 
-    // Special handling: Horizontal Shelves / Carousels
+    // 1. Instant O(1) Sidebar Nav Rail Navigation
+    const currentNav = current.closest('.nav-rail');
+    if (currentNav) {
+      if (dir === 'right') {
+        const mainTarget = document.querySelector(
+          '.hero-actions [data-tv-focus="true"], #catalog-grid-mount [data-tv-focus="true"], .shelf-carousel [data-tv-focus="true"], .main-content [data-tv-focus="true"]'
+        ) as HTMLElement;
+        if (mainTarget) {
+          this.focus(mainTarget);
+          return;
+        }
+      } else if (dir === 'down') {
+        const navButtons = Array.from(currentNav.querySelectorAll('[data-tv-focus="true"]')) as HTMLElement[];
+        const idx = navButtons.indexOf(current);
+        if (idx !== -1 && idx + 1 < navButtons.length) {
+          this.focus(navButtons[idx + 1]);
+          return;
+        }
+      } else if (dir === 'up') {
+        const navButtons = Array.from(currentNav.querySelectorAll('[data-tv-focus="true"]')) as HTMLElement[];
+        const idx = navButtons.indexOf(current);
+        if (idx > 0) {
+          this.focus(navButtons[idx - 1]);
+          return;
+        }
+      }
+      return;
+    }
+
+    // 2. Instant O(1) 6-Column Catalog Grid Navigation
+    const currentGrid = current.closest('#catalog-grid-mount');
+    if (currentGrid) {
+      const gridItems = Array.from(currentGrid.children) as HTMLElement[];
+      const idx = gridItems.indexOf(current);
+      if (idx !== -1) {
+        const COLS = 6;
+        if (dir === 'left') {
+          if (idx % COLS === 0) {
+            const activeNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                               document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
+            if (activeNav) {
+              this.focus(activeNav);
+              return;
+            }
+          } else if (idx > 0) {
+            this.focus(gridItems[idx - 1]);
+            return;
+          }
+        } else if (dir === 'right') {
+          if (idx + 1 < gridItems.length && idx % COLS !== COLS - 1) {
+            this.focus(gridItems[idx + 1]);
+            return;
+          }
+        } else if (dir === 'up') {
+          if (idx >= COLS) {
+            this.focus(gridItems[idx - COLS]);
+            return;
+          }
+        } else if (dir === 'down') {
+          if (idx + COLS < gridItems.length) {
+            this.focus(gridItems[idx + COLS]);
+            return;
+          }
+        }
+        return;
+      }
+    }
+
+    // 3. Instant O(1) Hero Billboard Actions Navigation
+    const currentHero = current.closest('.hero-actions');
+    if (currentHero) {
+      if (dir === 'left') {
+        const prevBtn = current.previousElementSibling as HTMLElement;
+        if (prevBtn && prevBtn.getAttribute('data-tv-focus') === 'true') {
+          this.focus(prevBtn);
+          return;
+        }
+        const activeNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                           document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
+        if (activeNav) {
+          this.focus(activeNav);
+          return;
+        }
+      } else if (dir === 'right') {
+        const nextBtn = current.nextElementSibling as HTMLElement;
+        if (nextBtn && nextBtn.getAttribute('data-tv-focus') === 'true') {
+          this.focus(nextBtn);
+          return;
+        }
+      } else if (dir === 'down') {
+        const firstShelfCard = document.querySelector('.shelf-carousel [data-tv-focus="true"]') as HTMLElement;
+        if (firstShelfCard) {
+          this.focus(firstShelfCard);
+          return;
+        }
+      }
+      return;
+    }
+
+    // 4. Instant O(1) Horizontal Shelves / Carousels Navigation
     const currentCarousel = current.closest('.shelf-carousel');
     if (currentCarousel) {
       if (dir === 'left') {
@@ -257,7 +356,8 @@ export class WebOSFocusManager {
           return;
         } else {
           // At the start of shelf: jump to sidebar nav
-          const activeNav = document.querySelector('.nav-rail .nav-item.active, .nav-rail [data-tv-focus="true"]') as HTMLElement;
+          const activeNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                             document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
           if (activeNav && searchScope === document) {
             this.focus(activeNav);
             return;
@@ -269,24 +369,41 @@ export class WebOSFocusManager {
           this.focus(nextCard);
           return;
         }
-      }
-    }
-
-    // Special handling: Sidebar Nav Rail
-    const currentNav = current.closest('.nav-rail');
-    if (currentNav) {
-      if (dir === 'right') {
-        const mainTarget = document.querySelector(
-          '.hero-actions [data-tv-focus="true"], .shelf-carousel [data-tv-focus="true"], .main-content [data-tv-focus="true"]'
-        ) as HTMLElement;
-        if (mainTarget) {
-          this.focus(mainTarget);
-          return;
+      } else if (dir === 'down') {
+        const currentSection = current.closest('.shelf-section');
+        if (currentSection) {
+          const nextSection = currentSection.nextElementSibling;
+          if (nextSection) {
+            const firstCard = nextSection.querySelector('[data-tv-focus="true"]') as HTMLElement;
+            if (firstCard) {
+              this.focus(firstCard);
+              return;
+            }
+          }
+        }
+      } else if (dir === 'up') {
+        const currentSection = current.closest('.shelf-section');
+        if (currentSection) {
+          const prevSection = currentSection.previousElementSibling;
+          if (prevSection && prevSection.classList.contains('shelf-section')) {
+            const firstCard = prevSection.querySelector('[data-tv-focus="true"]') as HTMLElement;
+            if (firstCard) {
+              this.focus(firstCard);
+              return;
+            }
+          } else {
+            const heroBtn = document.querySelector('.hero-actions [data-tv-focus="true"]') as HTMLElement;
+            if (heroBtn) {
+              this.focus(heroBtn);
+              return;
+            }
+          }
         }
       }
+      return;
     }
 
-    // Geometric Spatial Search
+    // 5. Fallback: Geometric Spatial Search for Dynamic Modals & Custom Screens
     this.geometricMove(current, dir, searchScope);
   }
 

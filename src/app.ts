@@ -36,7 +36,7 @@ export class App {
     this.appContainer.className = 'app-container';
 
     this.viewportEl = document.createElement('div');
-    this.viewportEl.style.cssText = 'flex: 1; height: 1080px; position: relative; overflow: hidden;';
+    this.viewportEl.style.cssText = 'position: absolute; left: 100px; top: 0; width: 1820px; height: 1080px; overflow: hidden;';
 
     this.appContainer.appendChild(this.viewportEl);
     this.rootEl.appendChild(this.appContainer);
@@ -70,6 +70,7 @@ export class App {
       this.navbar = null;
     }
 
+    this.viewportEl.style.cssText = 'position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden;';
     this.viewportEl.innerHTML = '';
 
     const auth = new AuthPage(() => {
@@ -81,6 +82,7 @@ export class App {
   }
 
   public showMainApp() {
+    this.viewportEl.style.cssText = 'position: absolute; left: 100px; top: 0; width: 1820px; height: 1080px; overflow: hidden;';
     this.viewportEl.innerHTML = '';
 
     // Initialize Sidebar Navbar with dynamic library callback
