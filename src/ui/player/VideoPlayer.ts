@@ -242,28 +242,42 @@ export class VideoPlayer {
       this.close();
       return;
     }
-    // Detect if audio track requires selective DTS/TrueHD remux
-    let isAudioRemux = /dts|dca|truehd|mlp/i.test((targetItem as any).audioCodec || '') ||
-                       /dts|dca|truehd|mlp/i.test(this.media.audioCodec || '');
+    const isDtsRegex = /dts|dca|truehd|mlp/i;
+    let isAudioRemux = isDtsRegex.test((targetItem as any).audioCodec || '') ||
+                       isDtsRegex.test(this.media.audioCodec || '');
 
-    // If audioCodec not directly on item, fetch stream info first
-    if (!isAudioRemux && targetId) {
-      try {
-        const info = await SkyCineApi.getStreamInfo(targetId);
-        if (info) {
-          if (info.tracks && Array.isArray(info.tracks)) {
-            const hasDts = info.tracks.some((t: any) =>
-              t.type === 'AUDIO' && /dts|dca|truehd|mlp/i.test(t.codec || '')
-            );
-            if (hasDts) isAudioRemux = true;
-          }
-          if (info.durationSeconds && (!this.duration || this.duration === 0)) {
-            this.duration = info.durationSeconds;
-          }
+    // Fetch stream info unconditionally to guarantee exact duration, remux flag & audio tracks
+    try {
+      const info = await SkyCineApi.getStreamInfo(targetId);
+      if (info) {
+        if (info.requiresAudioRemux) {
+          isAudioRemux = true;
         }
-      } catch (e) {
-        RemoteLogger.warn('WEBOS_PLAYER', `Stream info check: ${e}`);
+        if (isDtsRegex.test(info.audioCodec || '')) {
+          isAudioRemux = true;
+        }
+        const rawTracks = info.audioTracks || info.tracks || [];
+        if (Array.isArray(rawTracks) && rawTracks.some((t: any) => (t.type === 'AUDIO' || !t.type) && isDtsRegex.test(t.codec || ''))) {
+          isAudioRemux = true;
+        }
+        if (info.durationSeconds && info.durationSeconds > 0) {
+          this.duration = info.durationSeconds;
+        }
+        if (Array.isArray(info.audioTracks) && info.audioTracks.length > 0) {
+          this.audioTracks = info.audioTracks.map((t: any, idx: number) => ({
+            index: t.streamIndex !== undefined ? t.streamIndex : idx,
+            id: String(t.streamIndex !== undefined ? t.streamIndex : idx),
+            label: t.title || (t.language ? `Дорожка (${t.language.toUpperCase()})` : `Дорожка ${idx + 1}`),
+            language: t.language || 'ru',
+            channels: t.channels || 2,
+            codec: t.codec || 'AC3',
+            isSelected: Boolean(t.isDefault || idx === 0)
+          }));
+          this.updateAudioBtn();
+        }
       }
+    } catch (e) {
+      RemoteLogger.warn('WEBOS_PLAYER', `Stream info check failed: ${e}`);
     }
 
     const streamUrl = SkyCineApi.getStreamUrl(targetId, targetItem.filePath, isAudioRemux);
@@ -293,13 +307,15 @@ export class VideoPlayer {
         this.handlePlaybackEnded();
       },
       onTracksChanged: (tracks) => {
-        this.audioTracks = tracks;
-        this.updateAudioBtn();
+        if (tracks.length > 0) {
+          this.audioTracks = tracks;
+          this.updateAudioBtn();
+        }
       }
     });
 
     RemoteLogger.info('WEBOS_PLAYER', `Starting playback. URL: ${streamUrl}, startPos: ${safeStart}s, isAudioRemux: ${isAudioRemux}, duration: ${this.duration}s`);
-    webOSPlayerService.open(streamUrl, safeStart, isAudioRemux);
+    webOSPlayerService.open(streamUrl, safeStart, isAudioRemux, this.duration);
 
     // Save playback progress periodically every 15s
     this.progressInterval = setInterval(() => {

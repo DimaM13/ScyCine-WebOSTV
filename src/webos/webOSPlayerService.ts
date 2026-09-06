@@ -90,14 +90,17 @@ export class WebOSPlayerService {
     this.isAudioRemux = enabled;
   }
 
-  public open(url: string, startPositionSeconds: number = 0, isAudioRemux: boolean = false) {
-    RemoteLogger.info('WEBOS_PLAYER', `open() URL: ${url} at ${startPositionSeconds}s (remux: ${isAudioRemux})`);
+  public open(url: string, startPositionSeconds: number = 0, isAudioRemux: boolean = false, knownDuration: number = 0) {
+    RemoteLogger.info('WEBOS_PLAYER', `open() URL: ${url} at ${startPositionSeconds}s (remux: ${isAudioRemux}, knownDuration: ${knownDuration}s)`);
     this.close();
     this.initElements();
 
     this.isAudioRemux = isAudioRemux;
     this.baseStreamUrl = url;
     this.remuxTimeOffset = isAudioRemux ? startPositionSeconds : 0;
+    if (knownDuration > 0) {
+      this.durationSecs = knownDuration;
+    }
 
     let targetUrl = url;
     if (this.isAudioRemux && startPositionSeconds > 0) {
@@ -150,8 +153,8 @@ export class WebOSPlayerService {
         this.currentPosSecs = this.isAudioRemux
           ? (this.remuxTimeOffset + this.videoEl.currentTime)
           : this.videoEl.currentTime;
-        if (this.videoEl.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
-          this.durationSecs = this.isAudioRemux ? (this.durationSecs || this.videoEl.duration) : this.videoEl.duration;
+        if (!this.isAudioRemux && this.videoEl.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
+          this.durationSecs = this.videoEl.duration;
         }
         this.callbacks.onTimeUpdate?.(this.currentPosSecs, this.durationSecs);
       }
@@ -402,6 +405,25 @@ export class WebOSPlayerService {
 
   public selectAudioTrack(track: AudioTrackOption) {
     if (!this.videoEl) return;
+    if (this.isAudioRemux) {
+      RemoteLogger.info('WEBOS_PLAYER', `Remux switching audio track to index ${track.index} (${track.label}) at ${this.currentPosSecs}s`);
+      this.remuxTimeOffset = this.currentPosSecs;
+      let targetUrl = this.baseStreamUrl;
+      try {
+        const u = new URL(this.baseStreamUrl);
+        u.searchParams.set('startTime', Math.floor(this.currentPosSecs).toString());
+        u.searchParams.set('audioIndex', track.index.toString());
+        targetUrl = u.toString();
+        u.searchParams.delete('startTime');
+        this.baseStreamUrl = u.toString();
+      } catch {
+        targetUrl = `${this.baseStreamUrl}${this.baseStreamUrl.includes('?') ? '&' : '?'}startTime=${Math.floor(this.currentPosSecs)}&audioIndex=${track.index}`;
+      }
+      this.videoEl.src = targetUrl;
+      this.videoEl.load();
+      this.videoEl.play().catch(() => {});
+      return;
+    }
     try {
       const tracks = (this.videoEl as any).audioTracks;
       if (!tracks) return;

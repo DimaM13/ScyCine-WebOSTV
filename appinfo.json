@@ -1,6 +1,6 @@
 {
   "id": "tv.skycine.webos",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "vendor": "SkyLight",
   "type": "web",
   "main": "index.html",

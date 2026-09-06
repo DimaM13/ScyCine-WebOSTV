@@ -78,14 +78,23 @@ export class DetailPage {
     const isShow = this.media.type === 'SHOW' || this.media.type === 'EPISODE' || Boolean(this.media.showTitle);
     if (isShow) return;
 
+    const targetId = this.media.id || this.media.effectiveId;
     try {
       const [moviesRes, streamInfoRes] = await Promise.allSettled([
         SkyCineApi.getMovies(this.media.libraryId),
-        this.media.id ? SkyCineApi.getStreamInfo(this.media.id) : Promise.resolve(null)
+        targetId ? SkyCineApi.getStreamInfo(targetId) : Promise.resolve(null)
       ]);
 
       if (moviesRes.status === 'fulfilled' && Array.isArray(moviesRes.value)) {
-        this.relatedMovies = moviesRes.value.filter(m => m.id !== this.media.id);
+        this.relatedMovies = moviesRes.value.filter(m => m.id !== targetId);
+      }
+      if (this.relatedMovies.length < 3) {
+        try {
+          const allMovies = await SkyCineApi.getMovies();
+          if (Array.isArray(allMovies)) {
+            this.relatedMovies = allMovies.filter(m => m.id !== targetId).slice(0, 15);
+          }
+        } catch {}
       }
       if (streamInfoRes.status === 'fulfilled' && streamInfoRes.value) {
         this.streamInfo = streamInfoRes.value;
@@ -130,7 +139,8 @@ export class DetailPage {
       : (media.videoCodec ? '1080p Full HD' : 'HD');
     const videoCodec = (media.videoCodec || this.streamInfo?.videoCodec || 'H.264').toUpperCase();
 
-    const rawAudio = (this.streamInfo?.tracks?.find((t: any) => t.type === 'AUDIO')?.codec || media.audioCodec || 'AC3').toUpperCase();
+    const streamAudioCodec = this.streamInfo?.audioTracks?.[0]?.codec || this.streamInfo?.tracks?.find((t: any) => t.type === 'AUDIO')?.codec || this.streamInfo?.audioCodec;
+    const rawAudio = (streamAudioCodec || media.audioCodec || 'AC3').toUpperCase();
     let audioLabel = rawAudio;
     if (/dts|dca|truehd|mlp/i.test(rawAudio)) {
       audioLabel = 'Dolby Audio 5.1 (DTS Remux)';
