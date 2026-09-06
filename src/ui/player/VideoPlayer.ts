@@ -242,7 +242,11 @@ export class VideoPlayer {
       this.close();
       return;
     }
-    const streamUrl = SkyCineApi.getStreamUrl(targetId, targetItem.filePath);
+    // Detect if audio track requires selective DTS/TrueHD remux
+    const isAudioRemux = /dts|dca|truehd|mlp/i.test((targetItem as any).audioCodec || '') ||
+                         /dts|dca|truehd|mlp/i.test(this.media.audioCodec || '');
+
+    const streamUrl = SkyCineApi.getStreamUrl(targetId, targetItem.filePath, isAudioRemux);
 
     const startPos = (this.episode?.progressSeconds || (this.media as any).progressSeconds || this.media.userProgress || 0);
     const safeStart = startPos > 5 && (!this.duration || startPos < this.duration - 20) ? startPos : 0;
@@ -273,10 +277,6 @@ export class VideoPlayer {
         this.updateAudioBtn();
       }
     });
-
-    // Detect if audio track requires selective DTS/TrueHD remux
-    const isAudioRemux = /dts|dca|truehd|mlp/i.test((targetItem as any).audioCodec || '') ||
-                         /dts|dca|truehd|mlp/i.test(this.media.audioCodec || '');
 
     webOSPlayerService.open(streamUrl, safeStart, isAudioRemux);
 

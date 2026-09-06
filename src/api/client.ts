@@ -34,10 +34,12 @@ export const getApiClient = () => {
 
 export const SkyCineApi = {
   // Helpers
-  getStreamUrl(mediaId: string, filePath?: string): string {
+  getStreamUrl(mediaId: string, filePath?: string, isAudioRemux: boolean = false): string {
     const token = Preferences.getToken();
     let extSuffix = '';
-    if (filePath) {
+    if (isAudioRemux) {
+      extSuffix = '/video.mp4';
+    } else if (filePath) {
       const match = filePath.match(/\.([a-zA-Z0-9]+)$/);
       if (match) {
         extSuffix = `/video.${match[1].toLowerCase()}`;
