@@ -274,7 +274,25 @@ export class VideoPlayer {
       }
     });
 
-    webOSPlayerService.open(streamUrl, safeStart);
+    // Detect if audio track requires selective DTS/TrueHD remux
+    const isAudioRemux = /dts|dca|truehd|mlp/i.test((targetItem as any).audioCodec || '') ||
+                         /dts|dca|truehd|mlp/i.test(this.media.audioCodec || '');
+
+    webOSPlayerService.open(streamUrl, safeStart, isAudioRemux);
+
+    // If not detected from item metadata, check stream info tracks as fallback
+    if (!isAudioRemux && targetId) {
+      SkyCineApi.getStreamInfo(targetId).then((info) => {
+        if (info && info.tracks) {
+          const hasDts = info.tracks.some((t: any) =>
+            t.type === 'AUDIO' && /dts|dca|truehd|mlp/i.test(t.codec || '')
+          );
+          if (hasDts) {
+            webOSPlayerService.setAudioRemux(true);
+          }
+        }
+      }).catch(() => {});
+    }
 
     // Save playback progress periodically every 15s
     this.progressInterval = setInterval(() => {

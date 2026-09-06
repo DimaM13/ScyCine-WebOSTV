@@ -22,6 +22,9 @@ export class WebOSPlayerService {
   private isBufferingState: boolean = false;
   private durationSecs: number = 0;
   private currentPosSecs: number = 0;
+  private isAudioRemux: boolean = false;
+  private baseStreamUrl: string = '';
+  private remuxTimeOffset: number = 0;
   private lastTogglePlayTime: number = 0;
   private seekSafetyTimer: any = null;
   private queuedSeek: { target: number } | null = null;
@@ -83,10 +86,29 @@ export class WebOSPlayerService {
     this.callbacks = callbacks;
   }
 
-  public open(url: string, startPositionSeconds: number = 0) {
-    RemoteLogger.info('WEBOS_PLAYER', `open() URL: ${url} at ${startPositionSeconds}s`);
+  public setAudioRemux(enabled: boolean) {
+    this.isAudioRemux = enabled;
+  }
+
+  public open(url: string, startPositionSeconds: number = 0, isAudioRemux: boolean = false) {
+    RemoteLogger.info('WEBOS_PLAYER', `open() URL: ${url} at ${startPositionSeconds}s (remux: ${isAudioRemux})`);
     this.close();
     this.initElements();
+
+    this.isAudioRemux = isAudioRemux;
+    this.baseStreamUrl = url;
+    this.remuxTimeOffset = isAudioRemux ? startPositionSeconds : 0;
+
+    let targetUrl = url;
+    if (this.isAudioRemux && startPositionSeconds > 0) {
+      try {
+        const u = new URL(url);
+        u.searchParams.set('startTime', Math.floor(startPositionSeconds).toString());
+        targetUrl = u.toString();
+      } catch {
+        targetUrl = `${url}${url.includes('?') ? '&' : '?'}startTime=${Math.floor(startPositionSeconds)}`;
+      }
+    }
 
     if (!this.videoEl || !this.videoContainer) {
       RemoteLogger.error('WEBOS_PLAYER', 'Failed to initialize video elements');
@@ -125,9 +147,11 @@ export class WebOSPlayerService {
 
     this.boundOnTimeUpdate = () => {
       if (!this.isSeeking && this.videoEl) {
-        this.currentPosSecs = this.videoEl.currentTime;
+        this.currentPosSecs = this.isAudioRemux
+          ? (this.remuxTimeOffset + this.videoEl.currentTime)
+          : this.videoEl.currentTime;
         if (this.videoEl.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
-          this.durationSecs = this.videoEl.duration;
+          this.durationSecs = this.isAudioRemux ? (this.durationSecs || this.videoEl.duration) : this.videoEl.duration;
         }
         this.callbacks.onTimeUpdate?.(this.currentPosSecs, this.durationSecs);
       }
@@ -151,7 +175,7 @@ export class WebOSPlayerService {
     const applyStartSeek = () => {
       if (seekDone) return;
       seekDone = true;
-      if (startPositionSeconds > 2 && this.videoEl) {
+      if (!this.isAudioRemux && startPositionSeconds > 2 && this.videoEl) {
         RemoteLogger.info('WEBOS_PLAYER', `Setting start currentTime: ${startPositionSeconds}s`);
         try {
           this.videoEl.currentTime = startPositionSeconds;
@@ -184,7 +208,7 @@ export class WebOSPlayerService {
 
     // Set video source
     try {
-      this.videoEl.src = url;
+      this.videoEl.src = targetUrl;
       this.videoEl.load();
 
       // Trigger playback
@@ -265,6 +289,33 @@ export class WebOSPlayerService {
     }, 3000);
 
     if (!this.videoEl) return;
+
+    if (this.isAudioRemux) {
+      this.remuxTimeOffset = target;
+      let targetUrl = this.baseStreamUrl;
+      try {
+        const u = new URL(this.baseStreamUrl);
+        u.searchParams.set('startTime', Math.floor(target).toString());
+        targetUrl = u.toString();
+      } catch {
+        targetUrl = `${this.baseStreamUrl}${this.baseStreamUrl.includes('?') ? '&' : '?'}startTime=${Math.floor(target)}`;
+      }
+
+      RemoteLogger.info('WEBOS_PLAYER', `Remux seek to: ${target.toFixed(2)}s via URL ${targetUrl}`);
+      const wasPlaying = !this.videoEl.paused;
+      this.videoEl.src = targetUrl;
+      this.videoEl.load();
+      if (wasPlaying) {
+        this.videoEl.play().catch(() => {});
+        this.isPlayingState = true;
+        this.callbacks.onStateChange?.(true, false);
+      }
+      setTimeout(() => {
+        this.isSeeking = false;
+        this.isHardwareBusy = false;
+      }, 300);
+      return;
+    }
 
     if (this.isHardwareBusy || this.isBufferingState) {
       RemoteLogger.info('WEBOS_PLAYER', `Hardware busy or buffering, queuing seek to ${target.toFixed(2)}s`);
@@ -381,6 +432,9 @@ export class WebOSPlayerService {
     this.isBufferingState = false;
     this.isPrepared = false;
     this.isPlayingState = false;
+    this.isAudioRemux = false;
+    this.baseStreamUrl = '';
+    this.remuxTimeOffset = 0;
 
     if (this.videoEl) {
       // Remove listeners

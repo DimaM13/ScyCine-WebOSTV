@@ -805,6 +805,108 @@ button.tv-kb-key[data-tv-focus="true"]:focus *  {
 
 
 /* ==========================================================================
+   MOVIE DETAIL: SPECS BAR & RECOMMENDATIONS
+   ========================================================================== */
+
+.detail-movie-wrap {
+  padding: 32px 64px 80px 64px;
+}
+
+.detail-specs-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 36px;
+}
+
+.detail-specs-bar > *:not(:last-child) {
+  margin-right: 20px;
+}
+
+.spec-card {
+  flex: 1;
+  background: rgba(13, 17, 26, 0.85);
+  border: 1.5px solid rgba(51, 65, 85, 0.5);
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+}
+
+.spec-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.spec-card-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.spec-card-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.spec-card-value {
+  font-size: 16px;
+  font-weight: 800;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-related-section {
+  margin-top: 10px;
+}
+
+.detail-related-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.detail-related-pill {
+  width: 5px;
+  height: 24px;
+  background: #e5a93c;
+  border-radius: 3px;
+  margin-right: 12px;
+}
+
+.detail-related-title {
+  font-size: 24px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.detail-related-carousel {
+  display: flex;
+  overflow-x: auto;
+  padding: 12px 10px 36px 4px;
+  contain: layout;
+  transform: translateZ(0);
+}
+
+.detail-related-carousel > *:not(:last-child) {
+  margin-right: 20px;
+}
+
+
+/* ==========================================================================
    VIDEO PLAYER & SEEK HUD BADGE
    ========================================================================== */
 

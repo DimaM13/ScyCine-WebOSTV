@@ -273,7 +273,34 @@ export class WebOSFocusManager {
             this.focus(firstEp);
             return;
           }
+          const firstRel = currentDetail.querySelector('#related-movies-mount [data-tv-focus="true"]') as HTMLElement;
+          if (firstRel) {
+            this.focus(firstRel);
+            return;
+          }
         }
+      } else if (current.closest('#related-movies-mount')) {
+        const relCards = Array.from(currentDetail.querySelectorAll('#related-movies-mount [data-tv-focus="true"]')) as HTMLElement[];
+        const rIdx = relCards.indexOf(current);
+        if (dir === 'left') {
+          if (rIdx > 0) {
+            this.focus(relCards[rIdx - 1]);
+            return;
+          } else {
+            const activeNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                               document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
+            if (activeNav) { this.focus(activeNav); return; }
+          }
+        } else if (dir === 'right') {
+          if (rIdx + 1 < relCards.length) {
+            this.focus(relCards[rIdx + 1]);
+            return;
+          }
+        } else if (dir === 'up') {
+          const playBtn = currentDetail.querySelector('[data-focus-id="detail-play-btn"]') as HTMLElement;
+          if (playBtn) { this.focus(playBtn); return; }
+        }
+        return;
       } else if (current.classList.contains('season-tab-btn')) {
         const tabs = Array.from(currentDetail.querySelectorAll('.season-tab-btn')) as HTMLElement[];
         const tIdx = tabs.indexOf(current);
