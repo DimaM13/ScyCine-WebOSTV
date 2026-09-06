@@ -190,14 +190,18 @@ export class App {
   public openDetail(media: MediaItem) {
     this.cleanupDetail();
 
-    // Hide background app container while detail view is open
-    this.appContainer.style.display = 'none';
+    // Hide background active page inside viewportEl, but keep viewportEl and navbar alive!
+    if (this.activePage && typeof this.activePage.getElement === 'function') {
+      this.activePage.getElement().style.display = 'none';
+    }
 
     const detail = new DetailPage(
       media,
       () => {
         this.activeDetail = null;
-        this.appContainer.style.display = 'block';
+        if (this.activePage && typeof this.activePage.getElement === 'function') {
+          this.activePage.getElement().style.display = '';
+        }
         focusManager.focusFirst();
       },
       (item, ep, list) => {
@@ -206,7 +210,7 @@ export class App {
     );
 
     this.activeDetail = detail;
-    this.rootEl.appendChild(detail.getElement());
+    this.viewportEl.appendChild(detail.getElement());
     setTimeout(() => {
       focusManager.focus('detail-play-btn');
     }, 50);
@@ -215,21 +219,44 @@ export class App {
   public async playMedia(media: MediaItem, episode?: Episode, episodesList?: Episode[]) {
     RemoteLogger.info('APP', `playMedia called for "${media.title || media.showTitle}" (type: ${media.type})`);
 
-    // If it's a show and no episode was specified, automatically resolve the first episode!
-    const isShow = media.type === 'SHOW' || Boolean(media.showTitle);
-    if (!episode && isShow) {
-      const title = media.title || media.showTitle || '';
-      RemoteLogger.info('APP', `Resolving first episode for show: "${title}"...`);
+    // If it's a show or an episode and no episode was specified:
+    const isShowOrEpisode = media.type === 'SHOW' || media.type === 'EPISODE' || Boolean(media.showTitle);
+    if (!episode && isShowOrEpisode) {
+      const showTitle = media.showTitle || media.title || '';
+      RemoteLogger.info('APP', `Resolving episode for show: "${showTitle}"...`);
       try {
-        const epList = await SkyCineApi.getShowEpisodes(title);
+        const epList = await SkyCineApi.getShowEpisodes(showTitle);
         if (epList && epList.length > 0) {
-          const targetEp = epList.find(e => (e.progressSeconds || 0) > 0 && !e.isCompleted) || epList[0];
-          RemoteLogger.info('APP', `Starting episode ${targetEp.seasonNumber}x${targetEp.episodeNumber}: "${targetEp.title}"`);
+          let targetEp: Episode | undefined;
+
+          // 1. If media represents a specific episode (from continue watching or search)
+          if (media.type === 'EPISODE' || media.seasonNumber) {
+            targetEp = epList.find(e => e.id === media.id) ||
+                       epList.find(e => e.seasonNumber === media.seasonNumber && e.episodeNumber === media.episodeNumber);
+          }
+
+          // 2. If no exact episode match, look for episode with saved progress
+          if (!targetEp) {
+            targetEp = epList.find(e => (e.progressSeconds || 0) > 0 && !e.isCompleted);
+          }
+
+          // 3. Fallback to first episode
+          if (!targetEp) {
+            targetEp = epList[0];
+          }
+
+          // Propagate saved progress from continue-watching media item if present
+          const savedProgress = (media as any).progressSeconds || media.userProgress || 0;
+          if (savedProgress > 0 && (!targetEp.progressSeconds || targetEp.progressSeconds === 0)) {
+            targetEp.progressSeconds = savedProgress;
+          }
+
+          RemoteLogger.info('APP', `Starting episode ${targetEp.seasonNumber}x${targetEp.episodeNumber}: "${targetEp.title}" (progress: ${targetEp.progressSeconds || 0}s)`);
           this.playMedia(media, targetEp, epList);
           return;
         }
       } catch (e: any) {
-        RemoteLogger.error('APP', `Failed to load episodes for show: ${title}`, e);
+        RemoteLogger.error('APP', `Failed to load episodes for show: ${showTitle}`, e);
       }
       this.openDetail(media);
       return;
@@ -251,7 +278,7 @@ export class App {
         this.activePlayer = null;
 
         // RESTORE OTHER UI LAYERS
-        this.appContainer.style.display = 'flex';
+        this.appContainer.style.display = 'block';
         if (this.activeDetail) {
           this.activeDetail.getElement().style.display = 'block';
           focusManager.focus('detail-play-btn');
@@ -291,7 +318,9 @@ export class App {
     if (this.activeDetail) {
       this.activeDetail.close();
       this.activeDetail = null;
-      this.appContainer.style.display = 'block';
+    }
+    if (this.activePage && typeof this.activePage.getElement === 'function') {
+      this.activePage.getElement().style.display = '';
     }
   }
 

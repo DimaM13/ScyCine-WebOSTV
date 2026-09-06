@@ -45,7 +45,7 @@ export class VideoPlayer {
     this.onBackCallback = onBack;
     this.onPlayNextCallback = onPlayNext;
 
-    this.duration = episode?.durationSeconds || media.durationSeconds || 0;
+    this.duration = episode?.durationSeconds || media.durationSeconds || (media as any).fullDuration || 0;
 
     if (episode && episodesList.length > 0) {
       this.activeEpisodeIndex = episodesList.findIndex(e => e.id === episode.id);
@@ -244,7 +244,7 @@ export class VideoPlayer {
     }
     const streamUrl = SkyCineApi.getStreamUrl(targetId, targetItem.filePath);
 
-    const startPos = (this.episode?.progressSeconds || this.media.userProgress || 0);
+    const startPos = (this.episode?.progressSeconds || (this.media as any).progressSeconds || this.media.userProgress || 0);
     const safeStart = startPos > 5 && (!this.duration || startPos < this.duration - 20) ? startPos : 0;
 
     webOSPlayerService.setKnownDuration(this.duration);
@@ -366,8 +366,9 @@ export class VideoPlayer {
   }
 
   public render() {
+    const showName = this.media.showTitle || this.media.title || '';
     const title = this.episode
-      ? `${this.media.title || this.media.showTitle || ''} • ${this.episode.episodeNumber} серия: ${this.episode.title || ''}`
+      ? `${showName ? `${showName} • ` : ''}${this.episode.seasonNumber ? `S${this.episode.seasonNumber}:E${this.episode.episodeNumber}` : `${this.episode.episodeNumber} серия`}${this.episode.title ? ` — ${this.episode.title}` : ''}`
       : this.media.title || 'Видео';
 
     const hasNext = this.activeEpisodeIndex !== -1 && this.activeEpisodeIndex < this.episodesList.length - 1;

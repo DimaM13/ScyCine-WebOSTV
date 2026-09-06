@@ -108,9 +108,10 @@ export class WebOSFocusManager {
 
     if (scroll) {
       try {
+        const isEpisode = el.classList.contains('episode-card');
         el.scrollIntoView({
           behavior: 'auto',
-          block: 'nearest',
+          block: isEpisode ? 'center' : 'nearest',
           inline: 'nearest'
         });
       } catch {
@@ -177,7 +178,15 @@ export class WebOSFocusManager {
       // If in content, navigate back to sidebar menu first
       const current = this.getCurrentFocusedElement();
       const inSidebar = current && current.closest('.nav-rail');
-      if (!inSidebar) {
+      if (inSidebar) {
+        const detailTarget = document.querySelector(
+          '.detail-view [data-focus-id="detail-play-btn"], .detail-view .season-tab-btn.active, .detail-view .episode-card'
+        ) as HTMLElement;
+        if (detailTarget) {
+          this.focus(detailTarget);
+          return;
+        }
+      } else {
         const targetNav = (document.querySelector('.nav-rail .nav-item.active') ||
                            document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
         if (targetNav) {
@@ -237,12 +246,20 @@ export class WebOSFocusManager {
     const currentDetail = current.closest('.detail-view');
     if (currentDetail) {
       if (current.matches('[data-focus-id="detail-back-btn"]')) {
-        if (dir === 'down') {
+        if (dir === 'left') {
+          const activeNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                             document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
+          if (activeNav) { this.focus(activeNav); return; }
+        } else if (dir === 'down') {
           const playBtn = currentDetail.querySelector('[data-focus-id="detail-play-btn"]') as HTMLElement;
           if (playBtn) { this.focus(playBtn); return; }
         }
       } else if (current.matches('[data-focus-id="detail-play-btn"]')) {
-        if (dir === 'up') {
+        if (dir === 'left') {
+          const activeNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                             document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
+          if (activeNav) { this.focus(activeNav); return; }
+        } else if (dir === 'up') {
           const backBtn = currentDetail.querySelector('[data-focus-id="detail-back-btn"]') as HTMLElement;
           if (backBtn) { this.focus(backBtn); return; }
         } else if (dir === 'down') {
@@ -260,9 +277,15 @@ export class WebOSFocusManager {
       } else if (current.classList.contains('season-tab-btn')) {
         const tabs = Array.from(currentDetail.querySelectorAll('.season-tab-btn')) as HTMLElement[];
         const tIdx = tabs.indexOf(current);
-        if (dir === 'left' && tIdx > 0) {
-          this.focus(tabs[tIdx - 1]);
-          return;
+        if (dir === 'left') {
+          if (tIdx > 0) {
+            this.focus(tabs[tIdx - 1]);
+            return;
+          } else {
+            const activeNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                               document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
+            if (activeNav) { this.focus(activeNav); return; }
+          }
         } else if (dir === 'right' && tIdx + 1 < tabs.length) {
           this.focus(tabs[tIdx + 1]);
           return;
@@ -276,21 +299,43 @@ export class WebOSFocusManager {
       } else if (current.classList.contains('episode-card')) {
         const epCards = Array.from(currentDetail.querySelectorAll('.episode-card')) as HTMLElement[];
         const eIdx = epCards.indexOf(current);
-        if (dir === 'left' && eIdx > 0) {
-          this.focus(epCards[eIdx - 1]);
-          return;
-        } else if (dir === 'right' && eIdx + 1 < epCards.length) {
-          this.focus(epCards[eIdx + 1]);
-          return;
-        } else if (dir === 'up') {
-          const activeTab = currentDetail.querySelector('.season-tab-btn.active, .season-tab-btn') as HTMLElement;
-          if (activeTab) {
-            this.focus(activeTab);
+        const EP_COLS = 4;
+        if (dir === 'left') {
+          if (eIdx % EP_COLS === 0) {
+            const activeNav = (document.querySelector('.nav-rail .nav-item.active') ||
+                               document.querySelector('.nav-rail [data-tv-focus="true"]')) as HTMLElement;
+            if (activeNav) { this.focus(activeNav); return; }
+          } else if (eIdx > 0) {
+            this.focus(epCards[eIdx - 1]);
             return;
           }
-          const playBtn = currentDetail.querySelector('[data-focus-id="detail-play-btn"]') as HTMLElement;
-          if (playBtn) {
-            this.focus(playBtn);
+        } else if (dir === 'right') {
+          if (eIdx + 1 < epCards.length) {
+            this.focus(epCards[eIdx + 1]);
+            return;
+          }
+        } else if (dir === 'up') {
+          if (eIdx >= EP_COLS) {
+            this.focus(epCards[eIdx - EP_COLS]);
+            return;
+          } else {
+            const activeTab = currentDetail.querySelector('.season-tab-btn.active, .season-tab-btn') as HTMLElement;
+            if (activeTab) {
+              this.focus(activeTab);
+              return;
+            }
+            const playBtn = currentDetail.querySelector('[data-focus-id="detail-play-btn"]') as HTMLElement;
+            if (playBtn) {
+              this.focus(playBtn);
+              return;
+            }
+          }
+        } else if (dir === 'down') {
+          if (eIdx + EP_COLS < epCards.length) {
+            this.focus(epCards[eIdx + EP_COLS]);
+            return;
+          } else if (eIdx < epCards.length - 1) {
+            this.focus(epCards[epCards.length - 1]);
             return;
           }
         }
@@ -316,6 +361,13 @@ export class WebOSFocusManager {
     const currentNav = current.closest('.nav-rail');
     if (currentNav) {
       if (dir === 'right') {
+        const detailTarget = document.querySelector(
+          '.detail-view [data-focus-id="detail-play-btn"], .detail-view .season-tab-btn.active, .detail-view .episode-card'
+        ) as HTMLElement;
+        if (detailTarget) {
+          this.focus(detailTarget);
+          return;
+        }
         const mainTarget = document.querySelector(
           '.hero-actions [data-tv-focus="true"], #catalog-grid-mount [data-tv-focus="true"], .shelf-carousel [data-tv-focus="true"], .main-content [data-tv-focus="true"]'
         ) as HTMLElement;

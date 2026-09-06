@@ -50,15 +50,20 @@ export class DetailPage {
   }
 
   private async loadEpisodesIfShow() {
-    const isShow = this.media.type === 'SHOW' || Boolean(this.media.showTitle);
+    const isShow = this.media.type === 'SHOW' || this.media.type === 'EPISODE' || Boolean(this.media.showTitle);
     if (!isShow) return;
 
-    const title = this.media.title || this.media.showTitle || '';
+    const showTitle = this.media.showTitle || this.media.title || '';
     try {
-      const epList = await SkyCineApi.getShowEpisodes(title);
+      const epList = await SkyCineApi.getShowEpisodes(showTitle);
       this.episodes = epList;
       if (epList.length > 0) {
-        this.selectedSeason = epList[0].seasonNumber || 1;
+        if (this.media.seasonNumber) {
+          this.selectedSeason = this.media.seasonNumber;
+        } else {
+          const inProgress = epList.find(e => (e.progressSeconds || 0) > 0 && !e.isCompleted);
+          this.selectedSeason = inProgress?.seasonNumber || epList[0].seasonNumber || 1;
+        }
       }
       this.render();
     } catch (e) {
@@ -68,12 +73,22 @@ export class DetailPage {
 
   public render() {
     const media = this.media;
-    const isShow = media.type === 'SHOW' || Boolean(media.showTitle);
+    const isShow = media.type === 'SHOW' || media.type === 'EPISODE' || Boolean(media.showTitle);
     const backdropUrl = SkyCineApi.getImageUrl(media.backdropPath || media.posterPath);
-    const title = media.title || media.displayTitle || media.showTitle || 'Без названия';
+    const title = media.showTitle || media.title || media.displayTitle || 'Без названия';
 
     const seasons = Array.from(new Set(this.episodes.map(e => e.seasonNumber))).sort((a, b) => a - b);
     const currentEpisodes = this.episodes.filter(e => e.seasonNumber === this.selectedSeason);
+
+    const resumeEp = isShow
+      ? (this.episodes.find(e => (e.progressSeconds || 0) > 0 && !e.isCompleted) || this.episodes[0])
+      : null;
+
+    const playBtnText = isShow
+      ? (resumeEp && (resumeEp.progressSeconds || 0) > 0
+          ? `Продолжить S${resumeEp.seasonNumber}:E${resumeEp.episodeNumber}`
+          : 'Смотреть с 1 серии')
+      : 'Смотреть фильм';
 
     this.container.innerHTML = `
       <!-- Top Hero Showcase -->
@@ -132,7 +147,7 @@ export class DetailPage {
               tabindex="0"
             >
               ${Icons.play(22, '#07090e')}
-              <span>${isShow ? 'Смотреть с 1 серии' : 'Смотреть фильм'}</span>
+              <span>${playBtnText}</span>
             </button>
           </div>
         </div>
@@ -194,7 +209,8 @@ export class DetailPage {
     if (playBtn) {
       playBtn.addEventListener('click', () => {
         if (isShow && this.episodes.length > 0) {
-          this.onPlayCallback(this.media, this.episodes[0], this.episodes);
+          const target = this.episodes.find(e => (e.progressSeconds || 0) > 0 && !e.isCompleted) || this.episodes[0];
+          this.onPlayCallback(this.media, target, this.episodes);
         } else {
           this.onPlayCallback(this.media);
         }

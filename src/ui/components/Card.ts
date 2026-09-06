@@ -19,12 +19,18 @@ export function createCinemaCard(
   const posterUrl = (item.posterPath || item.stillPath)
     ? SkyCineApi.getImageUrl(item.posterPath || item.stillPath)
     : (item.id ? SkyCineApi.getThumbnailUrl(item.id) : '');
-  const title = item.title || item.displayTitle || item.showTitle || 'Без названия';
-  const isShow = item.type === 'SHOW' || Boolean(item.showTitle);
-  const subText = isShow ? 'Сериал' : item.year ? `${item.year}` : 'Видео / Фильм';
+  const isShowOrEpisode = item.type === 'SHOW' || item.type === 'EPISODE' || Boolean(item.showTitle);
+  let title = item.title || item.displayTitle || item.showTitle || 'Без названия';
+  let subText = isShowOrEpisode ? 'Сериал' : item.year ? `${item.year}` : 'Видео / Фильм';
 
-  const progressSecs = item.userProgress || item.progressSeconds || 0;
-  const totalSecs = item.durationSeconds || 0;
+  if (item.showTitle && (item.type === 'EPISODE' || item.seasonNumber || (item.title && item.title !== item.showTitle))) {
+    title = item.showTitle;
+    const epPrefix = item.seasonNumber ? `S${item.seasonNumber}:E${item.episodeNumber || 1}` : '';
+    subText = epPrefix ? `${epPrefix} • ${item.title || 'Серия'}` : (item.title || 'Сериал');
+  }
+
+  const progressSecs = (item as any).progressSeconds || item.userProgress || 0;
+  const totalSecs = item.durationSeconds || (item as any).fullDuration || 0;
   const progressPercent = totalSecs > 0 && progressSecs > 5
     ? Math.min(100, Math.round((progressSecs / totalSecs) * 100))
     : 0;
