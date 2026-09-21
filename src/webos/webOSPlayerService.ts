@@ -22,9 +22,13 @@ export class WebOSPlayerService {
   private isBufferingState: boolean = false;
   private durationSecs: number = 0;
   private currentPosSecs: number = 0;
-  private isAudioRemux: boolean = false;
-  private baseStreamUrl: string = '';
-  private remuxTimeOffset: number = 0;
+  // Режим потока: 'direct' — прогрессивный файл, 'hls' — нативный HLS webOS (<video src=m3u8>).
+  // Прогрессивный AC3-ремукс УДАЛЁН: DTS/TrueHD идут через HLS с перекодом звука в AAC
+  // внутри сегментов (стабильный seek по плейлисту вместо reopen-хака со startTime).
+  // В HLS-режиме длительность только из knownDuration (метаданные): прошивка отдаёт
+  // окно плейлиста, а не фильм. Перемотка в обоих режимах — штатный currentTime.
+  private isHlsMode: boolean = false;
+  private hlsAudioIndex: number = 0;
   private lastTogglePlayTime: number = 0;
   private seekSafetyTimer: any = null;
   private queuedSeek: { target: number } | null = null;
@@ -86,32 +90,18 @@ export class WebOSPlayerService {
     this.callbacks = callbacks;
   }
 
-  public setAudioRemux(enabled: boolean) {
-    this.isAudioRemux = enabled;
-  }
-
-  public open(url: string, startPositionSeconds: number = 0, isAudioRemux: boolean = false, knownDuration: number = 0) {
-    RemoteLogger.info('WEBOS_PLAYER', `open() URL: ${url} at ${startPositionSeconds}s (remux: ${isAudioRemux}, knownDuration: ${knownDuration}s)`);
+  public open(url: string, startPositionSeconds: number = 0, mode: 'direct' | 'hls' = 'direct', knownDuration: number = 0, audioIndex: number = 0) {
+    RemoteLogger.info('WEBOS_PLAYER', `open() URL: ${url} at ${startPositionSeconds}s (mode: ${mode}, knownDuration: ${knownDuration}s)`);
     this.close();
     this.initElements();
 
-    this.isAudioRemux = isAudioRemux;
-    this.baseStreamUrl = url;
-    this.remuxTimeOffset = isAudioRemux ? startPositionSeconds : 0;
+    this.isHlsMode = mode === 'hls';
+    this.hlsAudioIndex = audioIndex;
     if (knownDuration > 0) {
       this.durationSecs = knownDuration;
     }
 
-    let targetUrl = url;
-    if (this.isAudioRemux && startPositionSeconds > 0) {
-      try {
-        const u = new URL(url);
-        u.searchParams.set('startTime', Math.floor(startPositionSeconds).toString());
-        targetUrl = u.toString();
-      } catch {
-        targetUrl = `${url}${url.includes('?') ? '&' : '?'}startTime=${Math.floor(startPositionSeconds)}`;
-      }
-    }
+    const targetUrl = url;
 
     if (!this.videoEl || !this.videoContainer) {
       RemoteLogger.error('WEBOS_PLAYER', 'Failed to initialize video elements');
@@ -150,10 +140,9 @@ export class WebOSPlayerService {
 
     this.boundOnTimeUpdate = () => {
       if (!this.isSeeking && this.videoEl) {
-        this.currentPosSecs = this.isAudioRemux
-          ? (this.remuxTimeOffset + this.videoEl.currentTime)
-          : this.videoEl.currentTime;
-        if (!this.isAudioRemux && this.videoEl.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
+        this.currentPosSecs = this.videoEl.currentTime;
+        // Длительность из железа — только в direct; в HLS там окно плейлиста.
+        if (!this.isHlsMode && this.videoEl.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
           this.durationSecs = this.videoEl.duration;
         }
         this.callbacks.onTimeUpdate?.(this.currentPosSecs, this.durationSecs);
@@ -178,7 +167,9 @@ export class WebOSPlayerService {
     const applyStartSeek = () => {
       if (seekDone) return;
       seekDone = true;
-      if (!this.isAudioRemux && startPositionSeconds > 2 && this.videoEl) {
+      // Resume: direct — seek по файлу; HLS — сервер уже подложил EXT-X-START,
+      // дублируем точным seekTo (нативный HLS-seek, reopen не нужен).
+      if (startPositionSeconds > 2 && this.videoEl) {
         RemoteLogger.info('WEBOS_PLAYER', `Setting start currentTime: ${startPositionSeconds}s`);
         try {
           this.videoEl.currentTime = startPositionSeconds;
@@ -191,10 +182,10 @@ export class WebOSPlayerService {
 
     this.boundOnLoadedMetadata = () => {
       this.isPrepared = true;
-      if (!this.isAudioRemux && this.videoEl?.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
+      if (!this.isHlsMode && this.videoEl?.duration && !isNaN(this.videoEl.duration) && this.videoEl.duration > 0) {
         this.durationSecs = this.videoEl.duration;
       }
-      RemoteLogger.info('WEBOS_PLAYER', `Metadata loaded. Duration: ${this.durationSecs}s (remux: ${this.isAudioRemux})`);
+      RemoteLogger.info('WEBOS_PLAYER', `Metadata loaded. Duration: ${this.durationSecs}s (mode: ${this.isHlsMode ? 'hls' : 'direct'})`);
       applyStartSeek();
       this.callbacks.onTimeUpdate?.(this.currentPosSecs, this.durationSecs);
       this.notifyAudioTracks();
@@ -293,33 +284,6 @@ export class WebOSPlayerService {
 
     if (!this.videoEl) return;
 
-    if (this.isAudioRemux) {
-      this.remuxTimeOffset = target;
-      let targetUrl = this.baseStreamUrl;
-      try {
-        const u = new URL(this.baseStreamUrl);
-        u.searchParams.set('startTime', Math.floor(target).toString());
-        targetUrl = u.toString();
-      } catch {
-        targetUrl = `${this.baseStreamUrl}${this.baseStreamUrl.includes('?') ? '&' : '?'}startTime=${Math.floor(target)}`;
-      }
-
-      RemoteLogger.info('WEBOS_PLAYER', `Remux seek to: ${target.toFixed(2)}s via URL ${targetUrl}`);
-      const wasPlaying = !this.videoEl.paused;
-      this.videoEl.src = targetUrl;
-      this.videoEl.load();
-      if (wasPlaying) {
-        this.videoEl.play().catch(() => {});
-        this.isPlayingState = true;
-        this.callbacks.onStateChange?.(true, false);
-      }
-      setTimeout(() => {
-        this.isSeeking = false;
-        this.isHardwareBusy = false;
-      }, 300);
-      return;
-    }
-
     if (this.isHardwareBusy || this.isBufferingState) {
       RemoteLogger.info('WEBOS_PLAYER', `Hardware busy or buffering, queuing seek to ${target.toFixed(2)}s`);
       this.queuedSeek = { target };
@@ -405,23 +369,10 @@ export class WebOSPlayerService {
 
   public selectAudioTrack(track: AudioTrackOption) {
     if (!this.videoEl) return;
-    if (this.isAudioRemux) {
-      RemoteLogger.info('WEBOS_PLAYER', `Remux switching audio track to index ${track.index} (${track.label}) at ${this.currentPosSecs}s`);
-      this.remuxTimeOffset = this.currentPosSecs;
-      let targetUrl = this.baseStreamUrl;
-      try {
-        const u = new URL(this.baseStreamUrl);
-        u.searchParams.set('startTime', Math.floor(this.currentPosSecs).toString());
-        u.searchParams.set('audioIndex', track.index.toString());
-        targetUrl = u.toString();
-        u.searchParams.delete('startTime');
-        this.baseStreamUrl = u.toString();
-      } catch {
-        targetUrl = `${this.baseStreamUrl}${this.baseStreamUrl.includes('?') ? '&' : '?'}startTime=${Math.floor(this.currentPosSecs)}&audioIndex=${track.index}`;
-      }
-      this.videoEl.src = targetUrl;
-      this.videoEl.load();
-      this.videoEl.play().catch(() => {});
+    if (this.isHlsMode) {
+      // HLS: смена дорожки = переоткрытие мастера с новым audioIndex,
+      // это делает VideoPlayer (у него URL-билдер). Сюда приходить не должно.
+      RemoteLogger.warn('WEBOS_PLAYER', 'selectAudioTrack ignored in HLS mode (VideoPlayer reopens master)');
       return;
     }
     try {
@@ -454,9 +405,8 @@ export class WebOSPlayerService {
     this.isBufferingState = false;
     this.isPrepared = false;
     this.isPlayingState = false;
-    this.isAudioRemux = false;
-    this.baseStreamUrl = '';
-    this.remuxTimeOffset = 0;
+    this.isHlsMode = false;
+    this.hlsAudioIndex = 0;
 
     if (this.videoEl) {
       // Remove listeners

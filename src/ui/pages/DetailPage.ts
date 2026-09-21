@@ -143,7 +143,7 @@ export class DetailPage {
     const rawAudio = (streamAudioCodec || media.audioCodec || 'AC3').toUpperCase();
     let audioLabel = rawAudio;
     if (/dts|dca|truehd|mlp/i.test(rawAudio)) {
-      audioLabel = 'Dolby Audio 5.1 (DTS Remux)';
+      audioLabel = 'DTS/TrueHD • HLS (звук → AAC)';
     } else if (rawAudio.includes('EAC3') || rawAudio.includes('ATMOS')) {
       audioLabel = 'Dolby Atmos / EAC3';
     } else if (rawAudio.includes('AC3')) {
@@ -154,7 +154,9 @@ export class DetailPage {
 
     const filePath = media.filePath || '';
     const ext = filePath ? (filePath.split('.').pop()?.toUpperCase() || 'MKV') : 'MKV';
-    const formatLabel = `${ext} • Direct Stream`;
+    // Точный режим (Direct/HLS) решает плеер по профилю webOS при старте;
+    // здесь честно показываем, что выбор автоматический.
+    const formatLabel = `${ext} • Авто (Direct/HLS)`;
 
     this.container.innerHTML = `
       <!-- Top Hero Showcase -->

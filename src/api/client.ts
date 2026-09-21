@@ -33,19 +33,38 @@ export const getApiClient = () => {
 };
 
 export const SkyCineApi = {
-  // Helpers
-  getStreamUrl(mediaId: string, filePath?: string, isAudioRemux: boolean = false): string {
+  // Helpers: прямой прогрессивный поток (direct — для нативных кодеков webOS).
+  // Суффикс /video.{ext} помогает прошивке определить контейнер.
+  getStreamUrl(mediaId: string, filePath?: string): string {
     const token = Preferences.getToken();
     let extSuffix = '';
-    if (isAudioRemux) {
-      extSuffix = '/video.mp4';
-    } else if (filePath) {
+    if (filePath) {
       const match = filePath.match(/\.([a-zA-Z0-9]+)$/);
       if (match) {
         extSuffix = `/video.${match[1].toLowerCase()}`;
       }
     }
     return `${Preferences.getServerUrl()}/api/stream/${encodeURIComponent(mediaId)}/direct${extSuffix}?token=${encodeURIComponent(token || '')}`;
+  },
+
+  // HLS (когда direct нельзя: DTS/TrueHD/FLAC/Vorbis/VC-1/WMV/...).
+  // Нативный pipeline webOS открывает master.m3u8 сам (<video src=m3u8>).
+  // isApple=0 => сервер отдаёт fMP4; audioIndex — streamIndex дорожки из info.
+  getHlsUrl(mediaId: string, opts?: { audioIndex?: number; startSecs?: number; quality?: string }): string {
+    const token = Preferences.getToken();
+    const q = opts?.quality || 'original';
+    const a = opts?.audioIndex !== undefined && opts.audioIndex !== null ? opts.audioIndex : 0;
+    const params = [
+      `quality=${encodeURIComponent(q)}`,
+      `audioIndex=${encodeURIComponent(String(a))}`,
+      'isApple=0',
+      'client=webos',
+    ];
+    if (opts?.startSecs && opts.startSecs > 1) {
+      params.push(`startTime=${Math.floor(opts.startSecs)}`);
+    }
+    params.push(`token=${encodeURIComponent(token || '')}`);
+    return `${Preferences.getServerUrl()}/api/stream/${encodeURIComponent(mediaId)}/master.m3u8?${params.join('&')}`;
   },
 
   getImageUrl(path?: string): string {
@@ -84,6 +103,22 @@ export const SkyCineApi = {
     const client = getApiClient();
     const res = await client.get(`/stream/${encodeURIComponent(mediaId)}/info`);
     return res.data;
+  },
+
+  // Завершение HLS-сессии сервера. client обязателен: без маркера _tvwebos
+  // sessionId не совпадёт с живой ТВ-сессией и kill промахнётся.
+  // Для direct-режима вызывать бессмысленно (сессий нет) — вызываем только в HLS.
+  async endHlsSession(mediaId: string, audioIndex: number): Promise<void> {
+    try {
+      const client = getApiClient();
+      await client.post('/stream/hls/session/end', {
+        mediaId,
+        quality: 'original',
+        audioIndex,
+        isApple: false,
+        client: 'webos',
+      });
+    } catch {}
   },
 
   // Libraries & Content

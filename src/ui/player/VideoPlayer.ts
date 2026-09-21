@@ -9,6 +9,7 @@ import { SeekBadge } from '../components/SeekBadge';
 import { Preferences } from '../../storage/preferences';
 import { Icons } from '../icons';
 import { RemoteLogger } from '../../logger';
+import { decideWebosPlayback } from '../../webos/playbackProfile';
 
 export class VideoPlayer {
   private container: HTMLElement;
@@ -31,6 +32,9 @@ export class VideoPlayer {
   private seekBadge: SeekBadge;
   private audioTracks: AudioTrackOption[] = [];
   private activeEpisodeIndex: number = -1;
+  // Режим потока по профилю webOS + streamIndex выбранной дорожки для HLS-мастера.
+  private playMode: 'direct' | 'hls' = 'direct';
+  private hlsAudioIndex: number = 0;
 
   constructor(
     media: MediaItem,
@@ -242,24 +246,15 @@ export class VideoPlayer {
       this.close();
       return;
     }
-    const isDtsRegex = /dts|dca|truehd|mlp/i;
-    let isAudioRemux = isDtsRegex.test((targetItem as any).audioCodec || '') ||
-                       isDtsRegex.test(this.media.audioCodec || '');
 
-    // Fetch stream info unconditionally to guarantee exact duration, remux flag & audio tracks
+    let videoCodec = (targetItem as any).videoCodec || this.media.videoCodec || '';
+    let audioCodec = (targetItem as any).audioCodec || this.media.audioCodec || '';
+
+    // Fetch stream info: exact duration, codecs, default audio track.
     try {
       const info = await SkyCineApi.getStreamInfo(targetId);
       if (info) {
-        if (info.requiresAudioRemux) {
-          isAudioRemux = true;
-        }
-        if (isDtsRegex.test(info.audioCodec || '')) {
-          isAudioRemux = true;
-        }
-        const rawTracks = info.audioTracks || info.tracks || [];
-        if (Array.isArray(rawTracks) && rawTracks.some((t: any) => (t.type === 'AUDIO' || !t.type) && isDtsRegex.test(t.codec || ''))) {
-          isAudioRemux = true;
-        }
+        if (info.videoCodec) videoCodec = info.videoCodec;
         if (info.durationSeconds && info.durationSeconds > 0) {
           this.duration = info.durationSeconds;
         }
@@ -273,14 +268,34 @@ export class VideoPlayer {
             codec: t.codec || 'AC3',
             isSelected: Boolean(t.isDefault || idx === 0)
           }));
+          const def = this.audioTracks.find(t => t.isSelected) || this.audioTracks[0];
+          if (def) {
+            this.hlsAudioIndex = def.index;
+            if (def.codec) audioCodec = def.codec;
+          }
           this.updateAudioBtn();
+        } else if (info.audioCodec) {
+          audioCodec = info.audioCodec;
         }
       }
     } catch (e) {
       RemoteLogger.warn('WEBOS_PLAYER', `Stream info check failed: ${e}`);
     }
 
-    const streamUrl = SkyCineApi.getStreamUrl(targetId, targetItem.filePath, isAudioRemux);
+    // Решение direct vs HLS по профилю webOS (спеки LG).
+    // DTS/DTS-HD/TrueHD/FLAC/Vorbis/VC-1/WMV и неизвестное — в HLS
+    // (звук перекодируется в AAC внутри сегментов; прогрессивный AC3-ремукс удалён).
+    const decision = decideWebosPlayback({
+      videoCodec,
+      audioCodec,
+      filePath: (targetItem as any).filePath,
+    });
+    this.playMode = decision.mode;
+    RemoteLogger.info('WEBOS_PLAYER', `Playback mode: ${this.playMode.toUpperCase()}. ${decision.reasons.join('; ')}`);
+
+    const streamUrl = this.playMode === 'hls'
+      ? SkyCineApi.getHlsUrl(targetId, { audioIndex: this.hlsAudioIndex, startSecs: 0 })
+      : SkyCineApi.getStreamUrl(targetId, (targetItem as any).filePath);
 
     const startPos = (this.episode?.progressSeconds || (this.media as any).progressSeconds || this.media.userProgress || 0);
     const safeStart = startPos > 5 && (!this.duration || startPos < this.duration - 20) ? startPos : 0;
@@ -291,7 +306,8 @@ export class VideoPlayer {
       onTimeUpdate: (cur, dur) => {
         if (this.isSeekingActive || this.pendingSeekTime !== null) return;
         this.currentTime = cur;
-        if (dur > 0 && (!isAudioRemux || !this.duration)) this.duration = dur;
+        // Длительность из железа — только в direct; в HLS там окно плейлиста.
+        if (dur > 0 && (this.playMode === 'direct' || !this.duration)) this.duration = dur;
         this.updateTimeline();
       },
       onStateChange: (playing) => {
@@ -314,8 +330,8 @@ export class VideoPlayer {
       }
     });
 
-    RemoteLogger.info('WEBOS_PLAYER', `Starting playback. URL: ${streamUrl}, startPos: ${safeStart}s, isAudioRemux: ${isAudioRemux}, duration: ${this.duration}s`);
-    webOSPlayerService.open(streamUrl, safeStart, isAudioRemux, this.duration);
+    RemoteLogger.info('WEBOS_PLAYER', `Starting playback. URL: ${streamUrl}, startPos: ${safeStart}s, mode: ${this.playMode}, duration: ${this.duration}s`);
+    webOSPlayerService.open(streamUrl, safeStart, this.playMode, this.duration, this.hlsAudioIndex);
 
     // Save playback progress periodically every 15s
     this.progressInterval = setInterval(() => {
@@ -385,6 +401,11 @@ export class VideoPlayer {
     const targetId = this.episode?.id || this.media.effectiveId || this.media.id;
     if (targetId && this.currentTime > 5 && this.duration > 0) {
       SkyCineApi.updateProgress(targetId, this.currentTime, this.duration).catch(() => {});
+    }
+    // Гасим HLS-сессию сервера (только в HLS-режиме; в direct сессий нет).
+    // Fire-and-forget: плеер уже закрывается, idle-свипер — страховка.
+    if (targetId && this.playMode === 'hls') {
+      SkyCineApi.endHlsSession(targetId, this.hlsAudioIndex).catch(() => {});
     }
 
     clearTimeout(this.osdTimer);
@@ -594,9 +615,26 @@ export class VideoPlayer {
         if (this.audioTracks.length > 1) {
           const curTrackIdx = this.audioTracks.findIndex(t => t.isSelected);
           const nextIdx = (curTrackIdx + 1) % this.audioTracks.length;
-          webOSPlayerService.selectAudioTrack(this.audioTracks[nextIdx]);
+          const next = this.audioTracks[nextIdx];
           this.audioTracks.forEach((t, i) => t.isSelected = i === nextIdx);
-          this.seekBadge.show('🔊 Аудиодорожка', this.audioTracks[nextIdx].label);
+          if (this.playMode === 'hls') {
+            // HLS: смена дорожки = переоткрытие мастера с новым audioIndex
+            // с текущей позиции (пауза/плей сохраняются через isPlaying).
+            // Старую сессию гасим точечно, иначе висит до idle-таймаута.
+            const oldIdx = this.hlsAudioIndex;
+            this.hlsAudioIndex = next.index;
+            const targetId = this.episode?.id || this.media.effectiveId || this.media.id;
+            if (oldIdx !== next.index) {
+              SkyCineApi.endHlsSession(targetId, oldIdx).catch(() => {});
+            }
+            const url = SkyCineApi.getHlsUrl(targetId, { audioIndex: this.hlsAudioIndex });
+            RemoteLogger.info('WEBOS_PLAYER', `HLS audio switch to index ${next.index} (${next.label}) at ${this.currentTime.toFixed(1)}s`);
+            webOSPlayerService.open(url, this.currentTime, 'hls', this.duration, this.hlsAudioIndex);
+            this.seekBadge.show('🔊 Аудиодорожка', `${next.label} (HLS)`);
+          } else {
+            webOSPlayerService.selectAudioTrack(next);
+            this.seekBadge.show('🔊 Аудиодорожка', next.label);
+          }
           this.resetOSDTimer();
         }
       });
